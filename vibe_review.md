@@ -3,7 +3,7 @@
 > **Reviewer**: Mistral Vibe  
 > **Date**: 2025-05-08  
 > **Repository**: LayeredContext  
-> **Version**: 0.1.0  
+> **Version**: 0.1.0
 
 ---
 
@@ -65,6 +65,7 @@ LayeredContext/
 ### 1. Clean Architecture & Separation of Concerns ✅
 
 The codebase follows a **layered architecture** that mirrors the domain concept:
+
 - Each layer (L1-L5) is isolated in its own module
 - Provider adapters follow a consistent protocol (`LLMProvider`)
 - Business logic (assembly, summarisation) is separate from infrastructure (persistence, HTTP)
@@ -90,6 +91,7 @@ class Layer(Protocol):
 ```
 
 This enables:
+
 - Type-safe provider switching
 - Easy extension with new providers
 - Clear contracts between components
@@ -97,6 +99,7 @@ This enables:
 ### 3. Test Coverage ✅
 
 All 5 tests pass, covering critical functionality:
+
 - Layer assembly ordering and token accounting
 - Sliding window eviction logic
 - Summariser triggering thresholds
@@ -126,6 +129,7 @@ def offline_completion(messages, *, model, max_tokens, latency_ms=0) -> Completi
 ```
 
 This enables:
+
 - Full UI/behavior exploration without spending tokens
 - Testing trace inspection
 - Development without API keys
@@ -143,23 +147,6 @@ This enables:
 
 ## Critical Issues
 
-### 1. **SEVERE: Committed API Keys in .env** 🔴
-
-```
-# .env
-OPENAI_API_KEY=sk-proj-o1bysELVX_NgZBK39r1td84i6dlTdLXbiLxn5y7vjE...
-ANTHROPIC_API_KEY=sk-ant-api03-XXUxt9Hkkr_yvQ8yVfW6awOWZ8vTObh0d...
-MISTRAL_API_KEY=qhhB1KgpUdDOMBWHwcjMF0J1f0ugE9l9
-```
-
-**Impact**: Full compromise of all three LLM provider accounts. These keys should be **immediately revoked**.
-
-**Fix**: 
-1. Revoke all three API keys immediately
-2. Add `.env` to `.gitignore` (it's already there but was committed before)
-3. Remove the file from git history: `git rm --cached .env && git commit --amend`
-4. Create `.env.example` with empty values (already exists, good)
-
 ### 2. **HIGH: No Input Validation on API Key Configuration** 🔴
 
 API keys are read directly from environment without validation:
@@ -173,6 +160,7 @@ if not settings.openai_api_key:
 **Risk**: If an empty string or invalid key is provided, the app silently falls into demo mode without warning the user that their intended provider isn't working.
 
 **Fix**: Add validation in `Settings` class:
+
 ```python
 # config.py
 class Settings(BaseSettings):
@@ -190,18 +178,20 @@ Or log a warning when falling back to offline mode.
 
 Different providers use different token counting methods:
 
-| Provider | Method | Issue |
-|----------|--------|-------|
-| OpenAI | `tiktoken.encoding_for_model()` | ✅ Accurate |
-| Anthropic | `rough_count()` | ⚠️ Estimated |
-| Mistral | `rough_count()` | ⚠️ Estimated |
+| Provider  | Method                          | Issue        |
+| --------- | ------------------------------- | ------------ |
+| OpenAI    | `tiktoken.encoding_for_model()` | ✅ Accurate  |
+| Anthropic | `rough_count()`                 | ⚠️ Estimated |
+| Mistral   | `rough_count()`                 | ⚠️ Estimated |
 
 **Impact**: Token accounting in traces will be inaccurate for Anthropic and Mistral, affecting:
+
 - Cost estimation (not implemented yet, but planned)
 - Prompt length decisions
 - Layer token reporting
 
 **Fix**: Implement proper token counting for all providers:
+
 - Mistral: Use `mistral-common` or `tokenizers` library
 - Anthropic: Use their official token counting approach
 - Or standardize on `tiktoken` for all (OpenAI's library works reasonably well for other models)
@@ -223,6 +213,7 @@ trace = TraceModel(
 **Impact**: Cannot track spending, provide usage analytics, or implement budget limits.
 
 **Fix**: Add cost calculation based on provider pricing:
+
 ```python
 # In each provider's complete() method
 return Completion(
@@ -236,6 +227,7 @@ return Completion(
 ### 5. **MAJOR: No Authentication/Authorization** 🟠
 
 The API has **no authentication**:
+
 - Anyone can create sessions
 - Anyone can access any session
 - Anyone can delete documents from any session
@@ -243,6 +235,7 @@ The API has **no authentication**:
 **Impact**: Multi-user deployment is insecure. One user could access/modify another's data.
 
 **Fix**: At minimum, add:
+
 - Session tokens or API keys for authentication
 - Session ownership validation
 - Consider JWT or OAuth2 for production
@@ -252,6 +245,7 @@ The API has **no authentication**:
 ### 6. **MAJOR: No Rate Limiting** 🟠
 
 No protection against:
+
 - API abuse
 - LLM provider rate limits
 - DoS attacks
@@ -262,9 +256,10 @@ No protection against:
 
 ## Minor Issues & Improvements
 
-### 7. **MEDIUM: Empty __init__.py Files** 🟡
+### 7. **MEDIUM: Empty **init**.py Files** 🟡
 
 Many `__init__.py` files are empty:
+
 - `app/__init__.py`
 - `app/layers/__init__.py`
 - `app/persistence/__init__.py`
@@ -273,6 +268,7 @@ Many `__init__.py` files are empty:
 **Issue**: Missed opportunity to expose clean public APIs.
 
 **Fix**: Export relevant classes/functions:
+
 ```python
 # app/__init__.py
 from app.config import get_settings
@@ -298,6 +294,7 @@ max_tokens=300  # Magic number for planner
 ```
 
 **Fix**: Define constants at module level:
+
 ```python
 PLANNER_MAX_TOKENS = 300
 PLANNER_RESPONSE_SCHEMA = {...}
@@ -316,6 +313,7 @@ except ProviderError as exc:
 ```
 
 **Fix**: Standardize error handling with a custom exception hierarchy:
+
 ```python
 class LayeredContextError(Exception):
     pass
@@ -337,6 +335,7 @@ timeout=60
 ```
 
 **Fix**: Make configurable via `Settings`:
+
 ```python
 class Settings(BaseSettings):
     request_timeout: int = 60
@@ -347,6 +346,7 @@ class Settings(BaseSettings):
 `/health` endpoint only checks app status, not provider connectivity.
 
 **Fix**: Add provider health check:
+
 ```python
 @app.get("/health")
 def health(provider: LLMProvider = Depends(get_provider)) -> dict:
@@ -364,6 +364,7 @@ The `get_db()` generator is used correctly with `Depends`, but there's no explic
 **Risk**: Under heavy load, could exhaust database connections.
 
 **Fix**: Configure connection pool in SQLite engine:
+
 ```python
 # database.py
 engine = create_engine(
@@ -386,6 +387,7 @@ def get_traces(session_id: str, db: DbSession = Depends(get_db)) -> list[dict[st
 ```
 
 **Fix**: Add pagination parameters:
+
 ```python
 @app.get("/sessions/{session_id}/traces")
 def get_traces(
@@ -413,6 +415,7 @@ def create_session(...) -> dict[str, Any]:  # Could be SessionResponse
 ```
 
 **Fix**: Define proper response schemas using Pydantic:
+
 ```python
 class SessionResponse(BaseModel):
     id: str
@@ -438,6 +441,7 @@ Most modules and functions lack docstrings. Only a few have inline comments.
 No application logging for debugging or auditing.
 
 **Fix**: Add structured logging:
+
 ```python
 import logging
 import structlog
@@ -458,15 +462,15 @@ This review focused on the backend. The frontend code in `frontend/` was not exa
 
 ## Code Quality Metrics
 
-| Metric | Score | Notes |
-|--------|-------|-------|
-| Architecture | 9/10 | Clean, layered, well-organized |
-| Test Coverage | 8/10 | Core paths covered, needs more edge cases |
-| Security | 3/10 | **Critical**: API keys exposed, no auth |
-| Documentation | 6/10 | README good, code lacks docstrings |
-| Error Handling | 5/10 | Inconsistent, incomplete |
-| Configuration | 8/10 | Pydantic settings, good defaults |
-| Performance | 7/10 | Token counting could be optimized |
+| Metric         | Score | Notes                                     |
+| -------------- | ----- | ----------------------------------------- |
+| Architecture   | 9/10  | Clean, layered, well-organized            |
+| Test Coverage  | 8/10  | Core paths covered, needs more edge cases |
+| Security       | 3/10  | **Critical**: API keys exposed, no auth   |
+| Documentation  | 6/10  | README good, code lacks docstrings        |
+| Error Handling | 5/10  | Inconsistent, incomplete                  |
+| Configuration  | 8/10  | Pydantic settings, good defaults          |
+| Performance    | 7/10  | Token counting could be optimized         |
 
 ---
 
@@ -529,6 +533,7 @@ The 5-layer architecture is the codebase's strongest feature:
 ```
 
 Each layer:
+
 - Has a clear responsibility
 - Follows the same `build()` interface
 - Returns a `LayerOutput` with content and metadata
