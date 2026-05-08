@@ -117,7 +117,7 @@ def test_sliding_window_eviction_keeps_last_six_turns(db):
     assert l4["metadata"]["turn_count"] == 6
     assert "user 0" not in l4["content"]
     assert "assistant 0" not in l4["content"]
-    assert "current" in l4["content"]
+    assert "current" not in l4["content"]
 
 
 def test_summariser_triggers_when_four_evicted_pairs_are_pending(db):
@@ -143,3 +143,4 @@ def test_provider_model_mismatch_resolves_to_provider_default():
     assert resolve_model("anthropic", "gpt-5-mini") == "claude-sonnet-4-20250514"
     assert resolve_model("openai", "claude-sonnet-4-20250514") == "gpt-5-mini"
     assert resolve_model("mistral", "mistral-medium-3-5") == "mistral-medium-3-5"
+    assert resolve_model("openai", "unknown-model") == "gpt-5-mini"

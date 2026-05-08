@@ -1,4 +1,5 @@
 import json
+from contextlib import asynccontextmanager
 from time import perf_counter
 from typing import Any
 
@@ -40,7 +41,13 @@ class MessageRequest(BaseModel):
     content: str
 
 
-app = FastAPI(title="Layered Context Document Analyst")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="Layered Context Document Analyst", lifespan=lifespan)
 settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
@@ -49,11 +56,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def startup() -> None:
-    init_db()
 
 
 @app.get("/health")
@@ -67,10 +69,15 @@ def create_session(
     db: DbSession = Depends(get_db),
 ) -> dict[str, Any]:
     payload = payload or CreateSessionRequest()
+    mode = payload.mode or "layered"
+    if mode not in {"layered", "naive"}:
+        raise HTTPException(status_code=400, detail="mode must be layered or naive")
+    provider_name = payload.provider or settings.llm_provider
+    get_provider(provider_name)
     session = SessionModel(
-        mode=payload.mode or "layered",
-        provider=payload.provider or settings.llm_provider,
-        model=resolve_model(payload.provider or settings.llm_provider, payload.model or settings.llm_model),
+        mode=mode,
+        provider=provider_name,
+        model=resolve_model(provider_name, payload.model or settings.llm_model),
         system_prompt=DEFAULT_SYSTEM_PROMPT,
     )
     db.add(session)
@@ -100,10 +107,10 @@ def patch_session(
     if payload.provider is not None:
         get_provider(payload.provider)
         session.provider = payload.provider
-        if payload.model is None:
-            session.model = resolve_model(payload.provider, None)
     if payload.model is not None:
-        session.model = payload.model
+        session.model = resolve_model(session.provider, payload.model)
+    else:
+        session.model = resolve_model(session.provider, session.model)
     db.commit()
     db.refresh(session)
     return serialize_session(db, session)
@@ -155,6 +162,11 @@ def send_message(
     normalize_session_model(db, session)
     if not payload.content.strip():
         raise HTTPException(status_code=400, detail="Message content is required")
+    if len(payload.content) > settings.max_message_chars:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Message is too large. Maximum length is {settings.max_message_chars} characters.",
+        )
     provider = get_provider(session.provider)
     user_turn = TurnModel(
         session_id=session.id,
@@ -163,8 +175,7 @@ def send_message(
         token_count=provider.count_tokens(payload.content, model=session.model),
     )
     db.add(user_turn)
-    db.commit()
-    db.refresh(user_turn)
+    db.flush()
 
     try:
         summariser_event = None
@@ -186,6 +197,7 @@ def send_message(
             max_tokens=settings.max_tokens,
         )
     except ProviderError as exc:
+        db.rollback()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     latency_ms = completion.latency_ms or int((perf_counter() - started) * 1000)
     assistant_turn = TurnModel(
@@ -195,8 +207,7 @@ def send_message(
         token_count=provider.count_tokens(completion.content, model=session.model),
     )
     db.add(assistant_turn)
-    db.commit()
-    db.refresh(assistant_turn)
+    db.flush()
 
     trace_payload = assembly.trace
     trace_payload["latency_ms"] = latency_ms
@@ -211,11 +222,13 @@ def send_message(
     )
     db.add(trace)
     db.commit()
+    db.refresh(assistant_turn)
 
     return {
         "turn_id": user_turn.id,
         "assistant_message": completion.content,
         "trace": trace_payload,
+        "user_turn": serialize_turn(user_turn),
         "assistant_turn": serialize_turn(assistant_turn),
     }
 

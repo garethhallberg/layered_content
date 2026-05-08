@@ -59,13 +59,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(detail || response.statusText);
+    let message = detail || response.statusText;
+    try {
+      const parsed = JSON.parse(detail) as { detail?: unknown };
+      if (typeof parsed.detail === "string") {
+        message = parsed.detail;
+      }
+    } catch {
+      // Keep the raw response text when the body is not JSON.
+    }
+    throw new Error(message);
   }
   return response.json() as Promise<T>;
 }
 
 export const api = {
-  createSession: () => request<AppSession>("/sessions", { method: "POST", body: "{}" }),
+  createSession: () => request<AppSession>("/sessions", { method: "POST", body: JSON.stringify({}) }),
   getSession: (id: string) => request<AppSession>(`/sessions/${id}`),
   patchSession: (id: string, payload: Partial<Pick<AppSession, "mode" | "provider" | "model">>) =>
     request<AppSession>(`/sessions/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
@@ -77,10 +86,9 @@ export const api = {
   deleteDocument: (sessionId: string, documentId: string) =>
     request<{ status: string }>(`/sessions/${sessionId}/documents/${documentId}`, { method: "DELETE" }),
   sendMessage: (id: string, content: string) =>
-    request<{ turn_id: string; assistant_message: string; trace: Trace; assistant_turn: Turn }>(
+    request<{ turn_id: string; assistant_message: string; trace: Trace; user_turn: Turn; assistant_turn: Turn }>(
       `/sessions/${id}/messages`,
       { method: "POST", body: JSON.stringify({ content }) }
     ),
   getTraces: (id: string) => request<Trace[]>(`/sessions/${id}/traces`)
 };
-

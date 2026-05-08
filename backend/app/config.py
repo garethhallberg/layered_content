@@ -8,8 +8,11 @@ class Settings(BaseSettings):
     llm_model: str | None = None
     planner_model: str | None = None
     max_tokens: int = 900
+    max_upload_bytes: int = 10 * 1024 * 1024
+    max_message_chars: int = 12000
     recent_turn_count: int = 6
     summary_threshold_pairs: int = 4
+    summary_batch_pairs: int = 4
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     openai_api_key: str | None = None
@@ -52,7 +55,7 @@ KNOWN_MODEL_PREFIXES = {
 
 
 def default_model_for_provider(provider: str) -> str:
-    return DEFAULT_MODELS.get(provider.lower(), "gpt-4o-mini")
+    return DEFAULT_MODELS.get(provider.lower(), DEFAULT_MODELS["openai"])
 
 
 def resolve_model(provider: str, requested_model: str | None) -> str:
@@ -77,4 +80,4 @@ def is_model_compatible(provider: str, model: str | None) -> bool:
     ]
     if any(model.startswith(prefix) for prefix in other_prefixes):
         return False
-    return True
+    return False

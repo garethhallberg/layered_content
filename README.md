@@ -26,6 +26,9 @@ ANTHROPIC_API_KEY=...
 MISTRAL_API_KEY=...
 RECENT_TURN_COUNT=6
 SUMMARY_THRESHOLD_PAIRS=4
+SUMMARY_BATCH_PAIRS=4
+MAX_UPLOAD_BYTES=10485760
+MAX_MESSAGE_CHARS=12000
 ```
 
 Switching `LLM_PROVIDER` between `openai`, `anthropic`, and `mistral` changes the adapter without code changes. If `LLM_MODEL` is blank or belongs to another provider, the backend picks a provider-native default: `gpt-5-mini`, `claude-sonnet-4-20250514`, or `mistral-small-2603`. API keys are read from environment variables and are never returned to the frontend.

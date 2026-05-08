@@ -1,11 +1,19 @@
 from io import BytesIO
 
 from fastapi import HTTPException, UploadFile
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
+
+from app.config import get_settings
 
 
 async def parse_upload(file: UploadFile) -> str:
     data = await file.read()
+    max_upload_bytes = get_settings().max_upload_bytes
+    if len(data) > max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File is too large. Maximum upload size is {max_upload_bytes} bytes.",
+        )
     filename = file.filename or "document"
     suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
 
@@ -23,4 +31,3 @@ async def parse_upload(file: UploadFile) -> str:
             return data.decode("latin-1")
 
     raise HTTPException(status_code=400, detail="Supported document types: .pdf, .txt, .md")
-

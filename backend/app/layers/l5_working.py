@@ -72,7 +72,35 @@ class L5WorkingLayer:
 
     def _extract_entities(self, text: str) -> list[str]:
         entities = re.findall(r"\b[A-Z][A-Za-z0-9&.-]*(?:\s+[A-Z][A-Za-z0-9&.-]*){0,3}", text)
-        return list(dict.fromkeys(entity.strip() for entity in entities))[:8]
+        stopwords = {
+            "A",
+            "An",
+            "And",
+            "Are",
+            "Can",
+            "Do",
+            "Does",
+            "For",
+            "How",
+            "If",
+            "Is",
+            "It",
+            "Please",
+            "Tell",
+            "The",
+            "What",
+            "When",
+            "Where",
+            "Which",
+            "Who",
+            "Why",
+        }
+        cleaned = [
+            entity.strip()
+            for entity in entities
+            if entity.strip() not in stopwords and len(entity.strip()) > 1
+        ]
+        return list(dict.fromkeys(cleaned))[:8]
 
     def _noticed_document_items(self, db: DbSession, session_id: str) -> list[str]:
         docs = db.scalars(
@@ -82,7 +110,14 @@ class L5WorkingLayer:
         ).all()
         items: list[str] = []
         for doc in docs[:3]:
-            first_line = next((line.strip() for line in doc.content.splitlines() if line.strip()), "")
+            first_line = next(
+                (
+                    line.strip()
+                    for line in doc.content.splitlines()
+                    if len(line.strip()) >= 20
+                ),
+                "",
+            )
             if first_line:
                 items.append(f"{doc.name}: {first_line[:180]}")
         return items

@@ -22,7 +22,7 @@ class SessionModel(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     mode: Mapped[str] = mapped_column(String, default="layered")
     provider: Mapped[str] = mapped_column(String, default="openai")
-    model: Mapped[str] = mapped_column(String, default="gpt-4o-mini")
+    model: Mapped[str] = mapped_column(String, default="gpt-5-mini")
     system_prompt: Mapped[str] = mapped_column(Text)
 
     documents: Mapped[list["DocumentModel"]] = relationship(
@@ -91,4 +91,3 @@ class TraceModel(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     session: Mapped[SessionModel] = relationship(back_populates="traces")
-

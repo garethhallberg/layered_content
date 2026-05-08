@@ -1,9 +1,12 @@
+import logging
 from time import perf_counter
 
 import httpx
 
 from app.config import get_settings
-from app.providers.base import Completion, Message, ProviderError, offline_completion, rough_count
+from app.providers.base import Completion, Message, offline_completion, provider_error, rough_count
+
+logger = logging.getLogger(__name__)
 
 
 class MistralProvider:
@@ -17,6 +20,10 @@ class MistralProvider:
     ) -> Completion:
         settings = get_settings()
         if not settings.mistral_api_key:
+            logger.warning(
+                "Mistral API key not configured, falling back to offline/demo mode. "
+                "Set MISTRAL_API_KEY environment variable to use Mistral."
+            )
             return offline_completion(messages, model=model, max_tokens=max_tokens)
 
         started = perf_counter()
@@ -27,7 +34,7 @@ class MistralProvider:
             timeout=60,
         )
         if response.is_error:
-            raise ProviderError(f"Mistral {response.status_code}: {response.text[:1000]}")
+            raise provider_error("Mistral", response)
         payload = response.json()
         usage = payload.get("usage", {})
         return Completion(

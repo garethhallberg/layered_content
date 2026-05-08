@@ -10,8 +10,9 @@ from app.providers.base import LLMProvider
 class L4RecentLayer:
     name = "L4_recent"
 
-    def __init__(self, *, include_all: bool = False):
+    def __init__(self, *, include_all: bool = False, include_current: bool = False):
         self.include_all = include_all
+        self.include_current = include_current
 
     def build(
         self,
@@ -26,11 +27,14 @@ class L4RecentLayer:
             .where(TurnModel.session_id == session.id)
             .order_by(TurnModel.created_at, TurnModel.id)
         ).all()
+        history_turns = all_turns if self.include_current else [
+            turn_item for turn_item in all_turns if turn_item.id != turn.id
+        ]
         if self.include_all:
-            selected = all_turns
+            selected = history_turns
             about_to_age_out: list[str] = []
         else:
-            selected = all_turns[-get_settings().recent_turn_count :]
+            selected = history_turns[-get_settings().recent_turn_count :]
             about_to_age_out = [t.id for t in selected[:2]] if len(selected) >= 5 else []
 
         if selected:
@@ -48,10 +52,10 @@ class L4RecentLayer:
             token_count=provider.count_tokens(content, model=session.model),
             metadata={
                 "turn_count": len(selected),
-                "all_turn_count": len(all_turns),
+                "all_turn_count": len(history_turns),
                 "window_size": None if self.include_all else get_settings().recent_turn_count,
                 "include_all": self.include_all,
+                "include_current": self.include_current,
                 "about_to_age_out_turn_ids": about_to_age_out,
             },
         )
-

@@ -9,6 +9,16 @@ import { MetricsPanel } from "./components/MetricsPanel";
 import { ModeToggle } from "./components/ModeToggle";
 import "./styles/app.css";
 
+const PROVIDER_OPTIONS = [
+  { value: "openai:gpt-5-mini", label: "OpenAI / GPT-5 mini" },
+  { value: "openai:gpt-5.2", label: "OpenAI / GPT-5.2" },
+  { value: "anthropic:claude-sonnet-4-20250514", label: "Anthropic / Claude Sonnet 4" },
+  { value: "anthropic:claude-opus-4-1-20250805", label: "Anthropic / Claude Opus 4.1" },
+  { value: "mistral:mistral-small-2603", label: "Mistral / Small 4" },
+  { value: "mistral:mistral-medium-3-5", label: "Mistral / Medium 3.5" },
+  { value: "mistral:mistral-large-2512", label: "Mistral / Large 3" }
+];
+
 function sessionIdFromLocation(): string | null {
   const params = new URLSearchParams(window.location.search);
   return params.get("session") || localStorage.getItem("layered-context-session");
@@ -47,6 +57,9 @@ function App() {
     return session.traces.find((trace) => trace.turn_id === selectedTraceId) || session.traces.at(-1);
   }, [session, selectedTraceId]);
 
+  const providerValue = session ? `${session.provider}:${session.model}` : "";
+  const providerOptionExists = PROVIDER_OPTIONS.some((option) => option.value === providerValue);
+
   const refresh = async () => {
     if (!session) return;
     const loaded = await api.getSession(session.id);
@@ -57,9 +70,12 @@ function App() {
   const changeMode = async (mode: Mode) => {
     if (!session) return;
     setBusy(true);
+    setError("");
     try {
       const updated = await api.patchSession(session.id, { mode });
       setSession(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Mode change failed");
     } finally {
       setBusy(false);
     }
@@ -68,9 +84,12 @@ function App() {
   const changeProvider = async (provider: string, model: string) => {
     if (!session) return;
     setBusy(true);
+    setError("");
     try {
       const updated = await api.patchSession(session.id, { provider, model });
       setSession(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Provider change failed");
     } finally {
       setBusy(false);
     }
@@ -104,11 +123,20 @@ function App() {
     setError("");
     try {
       const result = await api.sendMessage(session.id, content);
-      const loaded = await api.getSession(session.id);
-      setSession(loaded);
+      setSession({
+        ...session,
+        turns: [...session.turns, result.user_turn, result.assistant_turn],
+        traces: [...session.traces, result.trace]
+      });
       setSelectedTraceId(result.turn_id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Message failed");
+      try {
+        const refreshed = await api.getSession(session.id);
+        setSession(refreshed);
+      } catch {
+        // Keep the original provider error visible.
+      }
     } finally {
       setBusy(false);
     }
@@ -129,21 +157,27 @@ function App() {
         <label className="provider-control">
           Provider
           <select
-            value={`${session.provider}:${session.model}`}
+            value={providerValue}
             disabled={busy}
             onChange={(event) => {
               const [provider, model] = event.target.value.split(":");
               void changeProvider(provider, model);
             }}
           >
-            <option value="openai:gpt-5-mini">OpenAI / GPT-5 mini</option>
-            <option value="openai:gpt-5.2">OpenAI / GPT-5.2</option>
-            <option value="anthropic:claude-sonnet-4-20250514">Anthropic / Claude Sonnet 4</option>
-            <option value="anthropic:claude-opus-4-1-20250805">Anthropic / Claude Opus 4.1</option>
-            <option value="mistral:mistral-small-2603">Mistral / Small 4</option>
-            <option value="mistral:mistral-medium-3-5">Mistral / Medium 3.5</option>
-            <option value="mistral:mistral-large-2512">Mistral / Large 3</option>
+            {!providerOptionExists && (
+              <option value={providerValue}>
+                Current: {session.provider} / {session.model}
+              </option>
+            )}
+            {PROVIDER_OPTIONS.map((option) => (
+              <option value={option.value} key={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
+          <span className="provider-current">
+            Active: {session.provider} / {session.model}
+          </span>
         </label>
         <button className="icon-button" type="button" onClick={() => void refresh()} title="Refresh session">
           <RefreshCw size={18} />

@@ -1,9 +1,12 @@
+import logging
 from time import perf_counter
 
 import httpx
 
 from app.config import get_settings
-from app.providers.base import Completion, Message, ProviderError, offline_completion, rough_count
+from app.providers.base import Completion, Message, offline_completion, provider_error, rough_count
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIProvider:
@@ -23,17 +26,26 @@ class OpenAIProvider:
     ) -> Completion:
         settings = get_settings()
         if not settings.openai_api_key:
+            logger.warning(
+                "OpenAI API key not configured, falling back to offline/demo mode. "
+                "Set OPENAI_API_KEY environment variable to use OpenAI."
+            )
             return offline_completion(messages, model=model, max_tokens=max_tokens)
 
         started = perf_counter()
+        payload = {
+            "model": model,
+            "messages": messages,
+            "max_completion_tokens": max_tokens,
+        }
         response = httpx.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-            json={"model": model, "messages": messages, "max_tokens": max_tokens},
+            json=payload,
             timeout=60,
         )
         if response.is_error:
-            raise ProviderError(f"OpenAI {response.status_code}: {response.text[:1000]}")
+            raise provider_error("OpenAI", response)
         payload = response.json()
         usage = payload.get("usage", {})
         return Completion(

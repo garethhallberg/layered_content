@@ -33,14 +33,14 @@ def assemble_layers(
         layer_builders = [
             L1SystemLayer(),
             L2DocumentsLayer(),
-            L4RecentLayer(include_all=True),
+            L4RecentLayer(include_all=True, include_current=True),
         ]
     else:
         layer_builders = [
             L1SystemLayer(),
             L2DocumentsLayer(),
             L3SummaryLayer(),
-            L4RecentLayer(),
+            L4RecentLayer(include_current=False),
             L5WorkingLayer(),
         ]
 
@@ -63,4 +63,3 @@ def assemble_layers(
         "summariser_event": summariser_event,
     }
     return AssemblyResult(messages=messages, trace=trace, layers=outputs)
-

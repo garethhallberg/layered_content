@@ -22,6 +22,26 @@ class ProviderError(RuntimeError):
     pass
 
 
+def provider_error(provider_name: str, response: object) -> ProviderError:
+    status_code = getattr(response, "status_code", "unknown")
+    text = "Provider request failed"
+    code = None
+    try:
+        payload = response.json()  # type: ignore[attr-defined]
+        error = payload.get("error", payload)
+        if isinstance(error, dict):
+            text = str(error.get("message") or error.get("type") or text)
+            code = error.get("code")
+        else:
+            text = str(error)
+    except Exception:
+        reason = getattr(response, "reason_phrase", "")
+        if reason:
+            text = str(reason)
+    suffix = f" (code: {code})" if code else ""
+    return ProviderError(f"{provider_name} {status_code}: {text}{suffix}")
+
+
 class LLMProvider(Protocol):
     name: str
 

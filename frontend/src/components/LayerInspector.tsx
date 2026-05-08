@@ -60,7 +60,7 @@ function LayerBlock({ layer }: { layer: LayerTrace }) {
   const [open, setOpen] = useState(true);
   const covers = useMemo(() => {
     const ids = layer.metadata?.covers_turn_ids;
-    return Array.isArray(ids) && ids.length > 0 ? `covers turns 1-${ids.length}` : "";
+    return Array.isArray(ids) && ids.length > 0 ? `${Math.floor(ids.length / 2)} pairs covered` : "";
   }, [layer.metadata]);
   const atRiskIds = layer.metadata?.about_to_age_out_turn_ids;
   const planner = layer.metadata?.planner;

@@ -49,6 +49,7 @@ def run_summariser_if_due(
     pairs = pending_evicted_pairs(db, session.id)
     if len(pairs) < settings.summary_threshold_pairs:
         return None
+    pairs = pairs[: settings.summary_batch_pairs]
 
     exchange = "\n\n".join(
         f"USER:\n{user.content}\n\nASSISTANT:\n{assistant.content}"
@@ -73,7 +74,7 @@ def run_summariser_if_due(
         covers_turn_ids=json.dumps(covers),
     )
     db.add(summary)
-    db.commit()
+    db.flush()
     return {
         "summary_id": summary.id,
         "pairs_summarised": len(pairs),
@@ -82,4 +83,3 @@ def run_summariser_if_due(
         "prompt_tokens": completion.prompt_tokens,
         "completion_tokens": completion.completion_tokens,
     }
-
