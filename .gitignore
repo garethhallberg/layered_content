@@ -10,3 +10,6 @@ data/*.db
 data/*.db-*
 .env
 
+
+vibe_review.md
+
